@@ -32,7 +32,7 @@ def main() -> int:
     p.add_argument("--manufacturer", default="essl")
     p.add_argument("--wait-seconds", type=int, default=300)
     p.add_argument("--interval", type=float, default=5.0)
-    p.add_argument("--cloud", default="http://127.0.0.1:8080")
+    p.add_argument("--cloud", default="http://127.0.0.1:9990")
     p.add_argument("--cycles", type=int, default=3)
     p.add_argument("--sleep", type=float, default=5.0)
     args = p.parse_args()

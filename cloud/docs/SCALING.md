@@ -5,7 +5,7 @@
 Increase CPU/RAM on the cloud host. Uvicorn worker count:
 
 ```bash
-uvicorn app.main:app --workers 4 --host 0.0.0.0 --port 8080
+uvicorn app.main:app --workers 4 --host 0.0.0.0 --port 9990
 ```
 
 Rule of thumb: `workers = (2 × CPU cores) + 1`. Each worker has its own DB connection pool.

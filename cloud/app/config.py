@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str = _DEFAULT_ADMIN_PASSWORD
     bootstrap_org_name: str = "Brixigo Demo Organisation"
 
+    # Public self-serve signup (creates organisation + org admin)
+    allow_public_registration: bool = True
+
     # Brixigo.com HR & Payroll outbound sync (server-to-server). Empty URL disables push.
     # Local .env: BRIXIGO_CLOUD_HRMS_ENABLED / BRIXIGO_CLOUD_HRMS_BASE_URL / BRIXIGO_CLOUD_HRMS_API_KEY
     hrms_base_url: str = ""
@@ -89,8 +92,8 @@ class Settings(BaseSettings):
             return []
         # Local dashboard / dev tools
         return [
-            "http://127.0.0.1:8080",
-            "http://localhost:8080",
+            "http://127.0.0.1:9990",
+            "http://localhost:9990",
             "http://127.0.0.1:3000",
             "http://localhost:3000",
         ]

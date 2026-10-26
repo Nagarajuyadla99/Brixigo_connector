@@ -121,6 +121,41 @@ def test_login_and_me(client: TestClient, settings, auth_headers):
     assert data["role"] == "super_admin"
 
 
+def test_public_register_and_login(client: TestClient):
+    email = "newadmin@example.com"
+    password = "NewOrgAdmin!2026"
+    created = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "full_name": "New Admin",
+            "organisation_name": "Example Org",
+        },
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["email"] == email
+    assert body["role"] == "organisation_admin"
+    assert body["organisation_name"] == "Example Org"
+    assert body["access_token"]
+
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    assert login.status_code == 200
+    assert login.json()["access_token"]
+
+    dup = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "full_name": "Dup",
+            "organisation_name": "Other Org",
+        },
+    )
+    assert dup.status_code == 409
+
+
 def test_register_connector(client: TestClient, auth_headers):
     orgs = client.get("/api/v1/tenancy/organisations", headers=auth_headers).json()
     assert len(orgs) >= 1

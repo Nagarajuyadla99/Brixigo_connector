@@ -1388,6 +1388,41 @@ function navigate(module) {
   startLiveRefresh(module);
 }
 
+function applyAuthSession(data) {
+  setAuth(data.access_token, {
+    email: data.email,
+    full_name: data.full_name,
+    role: data.role,
+    organisation_id: data.organisation_id,
+    organisation_name: data.organisation_name,
+  });
+  showApp();
+  navigate('dashboard');
+}
+
+function formatApiError(detail, fallback) {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d) => d.msg || JSON.stringify(d)).join('; ');
+  }
+  return fallback;
+}
+
+function showAuthView(mode) {
+  const loginView = document.getElementById('auth-login-view');
+  const registerView = document.getElementById('auth-register-view');
+  if (!loginView || !registerView) return;
+  const isRegister = mode === 'register';
+  loginView.classList.toggle('hidden', isRegister);
+  registerView.classList.toggle('hidden', !isRegister);
+  document.getElementById('login-error')?.classList.add('hidden');
+  document.getElementById('register-error')?.classList.add('hidden');
+}
+
+document.getElementById('show-register')?.addEventListener('click', () => showAuthView('register'));
+document.getElementById('show-login')?.addEventListener('click', () => showAuthView('login'));
+
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errEl = document.getElementById('login-error');
@@ -1406,16 +1441,8 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     }).then(r => r.json());
-    if (data.detail) throw new Error(data.detail);
-    setAuth(data.access_token, {
-      email: data.email,
-      full_name: data.full_name,
-      role: data.role,
-      organisation_id: data.organisation_id,
-      organisation_name: data.organisation_name,
-    });
-    showApp();
-    navigate('dashboard');
+    if (data.detail) throw new Error(formatApiError(data.detail, 'Login failed'));
+    applyAuthSession(data);
   } catch (err) {
     errEl.textContent = err.message || 'Login failed';
     errEl.classList.remove('hidden');
@@ -1423,6 +1450,41 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     if (submit) {
       submit.disabled = false;
       submit.textContent = previous || 'Sign in';
+    }
+  }
+});
+
+document.getElementById('register-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('register-error');
+  const submit = document.getElementById('register-submit');
+  errEl.classList.add('hidden');
+  const previous = submit ? submit.textContent : '';
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = 'Creating…';
+  }
+  try {
+    const payload = {
+      organisation_name: document.getElementById('register-org').value.trim(),
+      full_name: document.getElementById('register-name').value.trim(),
+      email: document.getElementById('register-email').value.trim(),
+      password: document.getElementById('register-password').value,
+    };
+    const data = await fetch(`${API}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(r => r.json());
+    if (data.detail) throw new Error(formatApiError(data.detail, 'Registration failed'));
+    applyAuthSession(data);
+  } catch (err) {
+    errEl.textContent = err.message || 'Registration failed';
+    errEl.classList.remove('hidden');
+  } finally {
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = previous || 'Create account';
     }
   }
 });

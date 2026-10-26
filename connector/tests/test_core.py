@@ -496,7 +496,7 @@ def test_config_validation_rejects_bad_url():
             "organisation_id": "Brixigo Demo Organisation",
             "api_key": "bxk_test",
             "connector_id": "Branch Connector",
-            "cloud_base_url": "http://127.0.0.1:8080",
+            "cloud_base_url": "http://127.0.0.1:9990",
         },
         require_cloud=True,
     )

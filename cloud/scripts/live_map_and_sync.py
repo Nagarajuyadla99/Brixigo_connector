@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx
 
 PAYROLL = "http://127.0.0.1:9000"
-CLOUD = "http://127.0.0.1:8080"
+CLOUD = "http://127.0.0.1:9990"
 CLOUD_DB = Path(r"D:\Brixigo-Connector\cloud\data\brixigo_cloud.db")
 PAYROLL_ENV = Path(r"D:\payroll_management\etax_payroll\backend\.env")
 CODE = "infoessl9999"

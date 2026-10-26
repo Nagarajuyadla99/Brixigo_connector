@@ -11,15 +11,15 @@ cd cloud
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 9990 --reload
 ```
 
 Open:
 
-- Admin UI: http://127.0.0.1:8080/admin
-- Health: http://127.0.0.1:8080/api/health
-- Admin API: http://127.0.0.1:8080/api/v1
-- Connector API: http://127.0.0.1:8080/api/wf/biometric-enterprise
+- Admin UI: http://127.0.0.1:9990/admin
+- Health: http://127.0.0.1:9990/api/health
+- Admin API: http://127.0.0.1:9990/api/v1
+- Connector API: http://127.0.0.1:9990/api/wf/biometric-enterprise
 
 Default bootstrap admin (change in production via env):
 

@@ -13,10 +13,10 @@ cd cloud
 python -m venv .venv
 .venv\Scripts\activate        # Windows
 pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 9990 --reload
 ```
 
-Open `http://localhost:8080/admin` and sign in with bootstrap credentials (see `.env`).
+Open `http://localhost:9990/admin` and sign in with bootstrap credentials (see `.env`).
 
 ## Environment variables
 
@@ -41,7 +41,7 @@ After=network.target
 User=brixigo
 WorkingDirectory=/opt/brixigo/cloud
 EnvironmentFile=/opt/brixigo/cloud/.env
-ExecStart=/opt/brixigo/cloud/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers 4
+ExecStart=/opt/brixigo/cloud/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9990 --workers 4
 Restart=always
 
 [Install]
@@ -64,7 +64,7 @@ server {
     server_name cloud.example.com;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:9990;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

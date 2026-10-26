@@ -20,7 +20,7 @@ def main() -> int:
     parser.add_argument("--manufacturer", default="zkteco", choices=("zkteco", "essl", "zk"))
     parser.add_argument("--terminal", default="", help="Terminal code for cloud push")
     parser.add_argument("--name", default="", help="Friendly device name")
-    parser.add_argument("--cloud", default="http://127.0.0.1:8080", help="Cloud base URL")
+    parser.add_argument("--cloud", default="http://127.0.0.1:9990", help="Cloud base URL")
     parser.add_argument("--org-name", default="Brixigo Demo Organisation")
     parser.add_argument("--cycles", type=int, default=3)
     parser.add_argument("--sleep", type=float, default=5.0)
@@ -108,7 +108,7 @@ def main() -> int:
                 reg = cloud._request("POST", url, json_body=body)
             except CloudAPIError as exc:
                 print("Cloud register failed:", exc)
-                print("Start local cloud first: cd cloud && uvicorn app.main:app --port 8080")
+                print("Start local cloud first: cd cloud && uvicorn app.main:app --port 9990")
                 return 4
 
             updates = {
