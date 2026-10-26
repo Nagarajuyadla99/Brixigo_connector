@@ -1,0 +1,17 @@
+.env
+.env.*
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.log
+.pytest_cache/
+.claude/
+
+# Database/runtime files
+*.db
+*.db-shm
+*.db-wal
+
+# Local reset/backup folders
+_fresh_reset_*/

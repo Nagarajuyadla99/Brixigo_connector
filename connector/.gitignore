@@ -1,0 +1,13 @@
+data/
+logs/
+*.db
+*.enc
+dist/
+build/
+*.spec.bak
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.log

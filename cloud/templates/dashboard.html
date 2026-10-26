@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ app_name }} — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div id="login-screen" class="login-screen">
+    <div class="login-stage">
+      <aside class="login-brand" aria-hidden="true">
+        <div class="login-brand-top">
+          <span class="brand-mark">BX</span>
+          <p class="login-kicker">Brixigo Cloud</p>
+          <h1>Biometric operations platform</h1>
+          <p class="login-lede">Administer connectors, device fleets, and attendance synchronization from a single control plane.</p>
+        </div>
+        <ol class="login-flow">
+          <li>
+            <span class="flow-dot"></span>
+            <div>
+              <strong>Devices</strong>
+              <span>Biometric terminals</span>
+            </div>
+          </li>
+          <li>
+            <span class="flow-dot"></span>
+            <div>
+              <strong>Connector</strong>
+              <span>Local collection &amp; queue</span>
+            </div>
+          </li>
+          <li>
+            <span class="flow-dot"></span>
+            <div>
+              <strong>Cloud</strong>
+              <span>Attendance confirmed</span>
+            </div>
+          </li>
+        </ol>
+        <p class="login-foot">Administrator access · encrypted session</p>
+      </aside>
+      <section class="login-panel">
+        <div class="login-card">
+          <p class="login-kicker dark">Sign in</p>
+          <h2>Brixigo Cloud</h2>
+          <p class="subtitle">Enterprise device management</p>
+          <form id="login-form" autocomplete="on">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" name="email" placeholder="admin@brixigo.com" autocomplete="username" required />
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" name="password" placeholder="••••••••" autocomplete="current-password" required />
+            <button type="submit" class="btn btn-primary" id="login-submit">Sign in</button>
+            <p id="login-error" class="error-text hidden" role="alert"></p>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="app-shell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-mark sm">BX</span>
+        <span>Brixigo Cloud</span>
+      </div>
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <p class="nav-section">Operations</p>
+        <button data-module="dashboard" class="nav-item active">Dashboard</button>
+        <button data-module="monitoring" class="nav-item">Monitoring</button>
+        <button data-module="analytics" class="nav-item">Analytics</button>
+        <button data-module="attendance" class="nav-item">Attendance</button>
+        <p class="nav-section">Infrastructure</p>
+        <button data-module="connectors" class="nav-item">Connector Server</button>
+        <button data-module="devices" class="nav-item">Devices</button>
+        <button data-module="commands" class="nav-item">Commands</button>
+        <p class="nav-section">Workforce</p>
+        <button data-module="employees" class="nav-item">Employees</button>
+        <button data-module="templates" class="nav-item">Templates</button>
+        <button data-module="provisioning" class="nav-item">Provisioning</button>
+        <button data-module="firmware" class="nav-item">Firmware</button>
+        <p class="nav-section">Admin</p>
+        <button data-module="support" class="nav-item">Support</button>
+        <button data-module="reports" class="nav-item">Reports</button>
+        <button data-module="notifications" class="nav-item">Notifications</button>
+        <button data-module="audit" class="nav-item">Audit Logs</button>
+        <button data-module="settings" class="nav-item">Settings</button>
+        <button data-module="webhooks" class="nav-item">Webhooks</button>
+        <button data-module="organisations" class="nav-item">Organisations</button>
+        <button data-module="branches" class="nav-item">Branches</button>
+        <button data-module="departments" class="nav-item">Departments</button>
+        <button data-module="locations" class="nav-item">Locations</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div id="connector-server-status" class="connector-server-status">
+          <span class="css-label">Connector Server</span>
+          <span id="connector-server-name" class="css-name">—</span>
+          <span id="connector-server-pill" class="status-pill status-offline">unknown</span>
+        </div>
+        <div id="user-info" class="user-info"></div>
+        <button id="logout-btn" class="btn btn-ghost">Sign Out</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <h2 id="module-title">Dashboard</h2>
+        <div class="topbar-actions">
+          <span id="status-badge" class="badge badge-ok">Connected</span>
+        </div>
+      </header>
+
+      <section id="module-dashboard" class="module-panel">
+        <div class="stat-grid" id="stat-grid"></div>
+        <div class="chart-row">
+          <div class="chart-card"><canvas id="chart-attendance"></canvas></div>
+          <div class="chart-card"><canvas id="chart-health"></canvas></div>
+        </div>
+        <h3>Live connector servers</h3>
+        <div class="table-wrap"><table id="dash-connectors" class="data-table"></table></div>
+        <h3>Devices</h3>
+        <div class="table-wrap"><table id="dash-devices" class="data-table"></table></div>
+        <p class="hint">Attendance punches are managed on the <button type="button" class="link-btn" data-goto="attendance">Attendance</button> page.</p>
+      </section>
+
+      <section id="module-monitoring" class="module-panel hidden">
+        <div class="stat-grid" id="monitoring-stats"></div>
+      </section>
+
+      <section id="module-analytics" class="module-panel hidden">
+        <div class="stat-grid" id="analytics-stats"></div>
+        <div class="chart-card full"><canvas id="chart-uptime"></canvas></div>
+      </section>
+
+      <section id="module-attendance" class="module-panel hidden">
+        <p class="page-lede">See who punched, when they came in, and when they left. Each person is identified by name and employee code from your organisation roster.</p>
+        <div class="stat-grid" id="attendance-stats"></div>
+        <div class="toolbar">
+          <input type="search" id="attendance-employee" placeholder="Search name or employee code…" class="search-input" />
+          <input type="search" id="attendance-terminal" placeholder="Device or terminal…" class="search-input" />
+          <select id="attendance-event">
+            <option value="">All events</option>
+            <option value="IN">IN</option>
+            <option value="OUT">OUT</option>
+            <option value="BREAK_IN">BREAK_IN</option>
+            <option value="BREAK_OUT">BREAK_OUT</option>
+            <option value="OT_IN">OT_IN</option>
+            <option value="OT_OUT">OT_OUT</option>
+          </select>
+          <label class="toolbar-check"><input type="checkbox" id="attendance-today-only" checked /> Today only</label>
+          <div class="view-toggle" role="group" aria-label="Attendance view">
+            <button type="button" class="view-btn active" data-attendance-view="people">By person</button>
+            <button type="button" class="view-btn" data-attendance-view="log">Punch log</button>
+          </div>
+          <button class="btn btn-secondary" id="btn-refresh-attendance">Refresh</button>
+        </div>
+        <div id="attendance-people" class="people-grid"></div>
+        <div id="attendance-log" class="table-wrap hidden"><table id="table-attendance" class="data-table"></table></div>
+      </section>
+
+      <section id="module-connectors" class="module-panel hidden">
+        <p class="hint">Live connector servers registered with this cloud. Status updates automatically from heartbeats.</p>
+        <div class="toolbar">
+          <button class="btn btn-primary" id="btn-register-connector">Register Connector</button>
+          <button class="btn btn-secondary" id="btn-refresh-connectors">Refresh</button>
+        </div>
+        <div id="connector-credentials" class="hint hidden"></div>
+        <div class="table-wrap"><table id="table-connectors" class="data-table"></table></div>
+        <div id="connector-details" class="detail-panel hidden" aria-live="polite"></div>
+      </section>
+
+      <section id="module-devices" class="module-panel hidden">
+        <p class="hint">Biometric terminals registered in this cloud. Counts stay in sync with Connector Server and Dashboard.</p>
+        <div class="toolbar">
+          <input type="search" id="device-search" placeholder="Search devices…" class="search-input" />
+          <button class="btn btn-primary" id="btn-add-device" type="button">Add Device</button>
+          <button class="btn btn-secondary" id="btn-refresh-devices" type="button">Refresh</button>
+          <a href="/api/v1/devices/export/csv" id="device-export" class="btn btn-secondary" target="_blank">Export CSV</a>
+        </div>
+        <div class="table-wrap"><table id="table-devices" class="data-table"></table></div>
+        <div id="device-details" class="detail-panel hidden" aria-live="polite"></div>
+      </section>
+
+      <section id="module-commands" class="module-panel hidden">
+        <div class="toolbar">
+          <select id="command-status-filter"><option value="">All statuses</option><option value="queued">Queued</option><option value="completed">Completed</option><option value="failed">Failed</option></select>
+        </div>
+        <div class="table-wrap"><table id="table-commands" class="data-table"></table></div>
+      </section>
+
+      <section id="module-employees" class="module-panel hidden">
+        <p class="page-lede">Organisation employees are created automatically from biometric punches. Rename a person to replace the device user ID with their real name.</p>
+        <div class="stat-grid" id="employee-stats"></div>
+        <div class="toolbar">
+          <input type="search" id="employee-search" placeholder="Search employees…" class="search-input" />
+          <button class="btn btn-secondary" id="btn-sync-employees" type="button">Refresh from punches</button>
+          <button class="btn btn-primary" id="btn-add-employee" type="button">Add Employee</button>
+        </div>
+        <div id="employee-board" class="people-grid"></div>
+        <div class="table-wrap hidden"><table id="table-employees" class="data-table"></table></div>
+      </section>
+
+      <section id="module-templates" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-templates" class="data-table"></table></div>
+      </section>
+
+      <section id="module-provisioning" class="module-panel hidden">
+        <div id="provisioning-wizard" class="wizard-steps"></div>
+      </section>
+
+      <section id="module-firmware" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-firmware" class="data-table"></table></div>
+      </section>
+
+      <section id="module-support" class="module-panel hidden">
+        <p class="hint">Select a connector from the Connectors module, then use support actions via API or connector row actions.</p>
+        <div class="table-wrap"><table id="table-artifacts" class="data-table"></table></div>
+      </section>
+
+      <section id="module-reports" class="module-panel hidden">
+        <div class="toolbar">
+          <select id="report-type"><option value="devices">Devices</option><option value="connectors">Connectors</option><option value="employees">Employees</option><option value="attendance">Attendance</option></select>
+          <select id="report-format"><option value="csv">CSV</option><option value="xlsx">Excel</option><option value="pdf">PDF</option></select>
+          <button class="btn btn-primary" id="btn-create-report">Generate Report</button>
+        </div>
+        <div class="table-wrap"><table id="table-reports" class="data-table"></table></div>
+      </section>
+
+      <section id="module-notifications" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-notifications" class="data-table"></table></div>
+      </section>
+
+      <section id="module-audit" class="module-panel hidden">
+        <div class="toolbar">
+          <input type="search" id="audit-search" placeholder="Search audit logs…" class="search-input" />
+        </div>
+        <div class="table-wrap"><table id="table-audit" class="data-table"></table></div>
+      </section>
+
+      <section id="module-settings" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-policies" class="data-table"></table></div>
+      </section>
+
+      <section id="module-webhooks" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-webhooks" class="data-table"></table></div>
+      </section>
+
+      <section id="module-organisations" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-organisations" class="data-table"></table></div>
+      </section>
+
+      <section id="module-branches" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-branches" class="data-table"></table></div>
+      </section>
+
+      <section id="module-departments" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-departments" class="data-table"></table></div>
+      </section>
+
+      <section id="module-locations" class="module-panel hidden">
+        <div class="table-wrap"><table id="table-locations" class="data-table"></table></div>
+      </section>
+    </main>
+  </div>
+
+  </div>
+
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h3 id="modal-title">Add employee</h3>
+      <form id="modal-form">
+        <div id="modal-fields"></div>
+        <p id="modal-error" class="error-text hidden" role="alert"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="modal-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="modal-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
