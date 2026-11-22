@@ -73,6 +73,12 @@ class SettingsDialog(QDialog):
         self.auto_update.setChecked(s.auto_update)
         self.proxy = QLineEdit(s.proxy_url)
         self.proxy.setPlaceholderText("http://proxy:port (optional)")
+        self.employee_prefix = QLineEdit(s.employee_code_prefix)
+        self.employee_prefix.setPlaceholderText("Emp")
+        self.mission_numbers = QCheckBox(
+            "Mission employee codes have no prefix (Emp001 on this connector = 001 on the mission)"
+        )
+        self.mission_numbers.setChecked(bool(s.mission_omits_employee_prefix))
 
         hint = QLabel(
             "Organisation ID and API Key come from Brixigo Cloud → Connectors → Register. "
@@ -98,6 +104,8 @@ class SettingsDialog(QDialog):
         form.addRow("Command Signing Secret", self.command_secret)
         form.addRow("CA Bundle Path", self.ca_bundle)
         form.addRow("Proxy URL", self.proxy)
+        form.addRow("Employee code prefix", self.employee_prefix)
+        form.addRow("", self.mission_numbers)
         form.addRow("", self.verify_ssl)
         form.addRow("", self.auto_update)
 
@@ -149,4 +157,6 @@ class SettingsDialog(QDialog):
             "verify_ssl": self.verify_ssl.isChecked(),
             "auto_update": self.auto_update.isChecked(),
             "proxy_url": self.proxy.text().strip(),
+            "employee_code_prefix": self.employee_prefix.text().strip(),
+            "mission_omits_employee_prefix": self.mission_numbers.isChecked(),
         }

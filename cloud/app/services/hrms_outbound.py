@@ -25,7 +25,8 @@ from app.models import (
     HrmsSyncStatus,
     Organisation,
 )
-from app.services.employees import reported_person_name
+from app.services.employee_codes import EmployeeCodeIndex, organisation_omits_prefix
+from app.services.employees import get_by_code, reported_person_name
 from app.services.hrms_identity import (
     backfill_employee_hrms_mappings,
     canonical_hrms_employee_id,
@@ -55,12 +56,7 @@ def enqueue_punch(db: Session, punch: AttendancePunch, organisation: Organisatio
     if existing:
         return existing
     org = organisation or db.get(Organisation, punch.organisation_id)
-    emp = db.scalar(
-        select(Employee).where(
-            Employee.organisation_id == punch.organisation_id,
-            Employee.employee_code == punch.device_employee_code,
-        )
-    )
+    emp = get_by_code(db, punch.organisation_id, str(punch.device_employee_code or ""))
     meta = punch.metadata_json or {}
     name = ""
     if emp:
@@ -261,7 +257,8 @@ def sync_pending(
             select(Employee).where(Employee.organisation_id.in_({r.organisation_id for r in rows}))
         ).all()
     )
-    emp_map = {(e.organisation_id, str(e.employee_code)): e for e in emps}
+    omit_org_ids = {org_id for org_id, org in orgs.items() if organisation_omits_prefix(org.settings_json)}
+    emp_index = EmployeeCodeIndex(emps, omit_org_ids=omit_org_ids)
 
     payload_items: list[dict[str, Any]] = []
     send_rows: list[HrmsAttendanceOutbox] = []
@@ -279,7 +276,7 @@ def sync_pending(
         if row.attempts >= settings.hrms_max_attempts and row.status == HrmsSyncStatus.FAILED.value:
             stats["failed"] += 1
             continue
-        emp = emp_map.get((punch.organisation_id, str(punch.device_employee_code)))
+        emp = emp_index.get(punch.organisation_id, str(punch.device_employee_code or ""))
         hint = canonical_hrms_employee_id(
             db,
             organisation_id=punch.organisation_id,
@@ -364,14 +361,14 @@ def sync_pending(
         }
         for row, item in zip(send_rows, payload_items):
             matched = by_id.get(str(item.get("source_punch_id")))
-            emp = emp_map.get((row.organisation_id, str(row.employee_code)))
+            emp = emp_index.get(row.organisation_id, str(row.employee_code))
             if matched:
                 _apply_result(row, matched, db=db, employee=emp)
             else:
                 _mark_failed([row], "Partial batch: punch missing from HRMS response")
     else:
         for row, item in zip(send_rows, results):
-            emp = emp_map.get((row.organisation_id, str(row.employee_code)))
+            emp = emp_index.get(row.organisation_id, str(row.employee_code))
             if isinstance(item, dict):
                 _apply_result(row, item, db=db, employee=emp)
             else:

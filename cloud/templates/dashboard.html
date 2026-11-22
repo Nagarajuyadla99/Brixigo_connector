@@ -215,6 +215,7 @@
 
       <section id="module-employees" class="module-panel hidden">
         <p class="page-lede">Organisation employees are created automatically from biometric punches. Rename a person to replace the device user ID with their real name.</p>
+        <p class="page-lede" id="employee-code-note"></p>
         <div class="stat-grid" id="employee-stats"></div>
         <div class="toolbar">
           <input type="search" id="employee-search" placeholder="Search employees…" class="search-input" />
@@ -271,6 +272,12 @@
       </section>
 
       <section id="module-organisations" class="module-panel hidden">
+        <p class="page-lede">When a mission stores only the employee number, keep the prefix on this server. Emp001 here matches 001 on that mission. Attendance sent to the mission uses the number.</p>
+        <div class="toolbar">
+          <input id="org-code-prefix" placeholder="Prefix shown here, e.g. Emp" />
+          <label><input type="checkbox" id="org-mission-numbers" /> Mission codes have no prefix</label>
+          <button class="btn btn-primary" id="btn-save-code-align" type="button">Save employee code alignment</button>
+        </div>
         <div class="table-wrap"><table id="table-organisations" class="data-table"></table></div>
       </section>
 

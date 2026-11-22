@@ -520,7 +520,7 @@ class DailyPage(QWidget):
             )
             vals = [
                 row.get("employee_display_name") or "—",
-                row.get("employee_code") or "—",
+                row.get("display_employee_code") or row.get("employee_code") or "—",
                 row.get("employee_name_hint") or "—",
                 first_in or "—",
                 last_out or "—",

@@ -6,14 +6,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User
+from app.models import Organisation, User
 from app.schemas.admin import EmployeeBulkAssign, EmployeeCreate, EmployeeOut, EmployeeTransfer, EmployeeUpdate
 from app.security.auth import get_current_user, tenant_filter_org_id
 from app.security.rbac import can_access
 from app.security.tenant import assert_org_access
 from app.services import employees
+from app.services.employee_codes import (
+    display_employee_code,
+    mission_employee_code,
+    organisation_code_prefix,
+    organisation_omits_prefix,
+)
 from app.services.employees import reported_person_name
-from app.services.names import NameResolver, enrich_employee, resolve_branch, resolve_organisation
+from app.services.names import NameResolver, enrich_employee, ensure_branch, resolve_organisation
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
 
@@ -24,13 +30,25 @@ def _require(user: User = Depends(get_current_user)) -> User:
     return user
 
 
-def _out(emp, names: NameResolver, stats: dict | None = None) -> EmployeeOut:
+def _policy(db: Session, organisation_id: str) -> tuple[str, bool]:
+    org = db.get(Organisation, organisation_id) if organisation_id else None
+    settings = org.settings_json if org and isinstance(org.settings_json, dict) else {}
+    return organisation_code_prefix(settings), organisation_omits_prefix(settings)
+
+
+def _out(emp, names: NameResolver, stats: dict | None = None, *, db: Session | None = None) -> EmployeeOut:
     row = enrich_employee(EmployeeOut.model_validate(emp).model_dump(), names)
     extra = emp.extra_json if isinstance(emp.extra_json, dict) else {}
     public_name = reported_person_name(emp.name, emp.employee_code)
+    prefix, omit = _policy(db, emp.organisation_id) if db is not None else ("", False)
+    shown = display_employee_code(emp.employee_code, prefix=prefix)
     row["name"] = public_name
     row["source"] = str(extra.get("source") or "")
     row["device_user_id"] = str(emp.employee_code or "")
+    row["display_employee_code"] = shown
+    row["mission_employee_code"] = mission_employee_code(
+        emp.employee_code, omit_prefix=omit, prefix=prefix
+    )
     row["name_reported"] = bool(public_name)
     key = (emp.organisation_id, str(emp.employee_code))
     punch = (stats or {}).get(key) or {}
@@ -63,7 +81,7 @@ def list_emps(
     rows = employees.list_employees(
         db, organisation_id=tenant_filter_org_id(user), branch_id=branch_id, search=search, limit=limit, offset=offset,
     )
-    return [_out(e, names, stats) for e in rows]
+    return [_out(e, names, stats, db=db) for e in rows]
 
 
 @router.post("/sync-from-attendance")
@@ -82,10 +100,8 @@ def create_emp(body: EmployeeCreate, user: User = Depends(_require), db: Session
         raise HTTPException(status_code=403, detail="Access denied")
     branch_id = None
     if body.branch_name:
-        branch = resolve_branch(db, org.id, body.branch_name)
-        if not branch:
-            raise HTTPException(status_code=404, detail=f"Branch not found: {body.branch_name}")
-        branch_id = branch.id
+        branch = ensure_branch(db, org.id, body.branch_name)
+        branch_id = branch.id if branch else None
     try:
         emp = employees.create_employee(
             db,
@@ -104,7 +120,7 @@ def create_emp(body: EmployeeCreate, user: User = Depends(_require), db: Session
             extra_json=body.extra_json,
             actor_id=user.id,
         )
-        return _out(emp, NameResolver(db))
+        return _out(emp, NameResolver(db), db=db)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -112,7 +128,7 @@ def create_emp(body: EmployeeCreate, user: User = Depends(_require), db: Session
 @router.get("/{employee_id}", response_model=EmployeeOut)
 def get_emp(employee_id: str, user: User = Depends(_require), db: Session = Depends(get_db)):
     emp = _require_employee(db, user, employee_id)
-    return _out(emp, NameResolver(db))
+    return _out(emp, NameResolver(db), db=db)
 
 
 @router.patch("/{employee_id}", response_model=EmployeeOut)
@@ -132,7 +148,7 @@ def update_emp(
     )
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
-    return _out(emp, NameResolver(db))
+    return _out(emp, NameResolver(db), db=db)
 
 
 @router.delete("/{employee_id}")
@@ -169,7 +185,7 @@ def bulk_assign(body: EmployeeBulkAssign, user: User = Depends(_require), db: Se
         actor_id=user.id,
         organisation_id=tenant_org,
     )
-    return [_out(e, names) for e in rows]
+    return [_out(e, names, db=db) for e in rows]
 
 
 @router.post("/{employee_id}/transfer", response_model=EmployeeOut)
@@ -185,4 +201,4 @@ def transfer_emp(
     )
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
-    return _out(emp, NameResolver(db))
+    return _out(emp, NameResolver(db), db=db)

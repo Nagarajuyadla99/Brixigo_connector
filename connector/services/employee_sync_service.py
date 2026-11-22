@@ -346,6 +346,10 @@ class EmployeeSyncService:
         if not code:
             raise ValueError("employee_code required")
         existing = self._employees.get_by_code(code)
+        if existing is None and hasattr(self._employees, "find_aligned"):
+            existing = self._employees.find_aligned(code)
+        if existing:
+            code = existing.employee_code
         return Employee(
             id=(existing.id if existing else str(data.get("id") or new_id())),
             employee_code=code,

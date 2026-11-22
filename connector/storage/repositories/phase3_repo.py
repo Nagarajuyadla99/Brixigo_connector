@@ -103,6 +103,17 @@ class EmployeeRepository:
         )
         return self._row(row) if row else None
 
+    def find_aligned(self, code: str) -> Optional[Employee]:
+        """Emp001 on this connector is the same person as mission 001."""
+        from services.employee_codes import active_omit, codes_align
+
+        if not active_omit():
+            return None
+        hits = [emp for emp in self.list_all() if codes_align(emp.employee_code, code)]
+        if len(hits) == 1:
+            return hits[0]
+        return None
+
     def list_all(self, *, status: str | None = None) -> list[Employee]:
         if status:
             rows = self._db.fetchall(

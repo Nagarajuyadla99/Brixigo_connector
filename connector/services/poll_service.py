@@ -306,6 +306,8 @@ class PollService:
                 current_users=(info.user_count if info else None),
                 current_logs=max(int(info.attendance_count) if info else 0, stored, fetched),
                 last_attendance_at=last_att or None,
+                health_status="healthy",
+                last_health_at=datetime.now().isoformat(sep=" ", timespec="seconds"),
             )
             self._sync_logs.add(
                 device_id=device.id,
@@ -848,7 +850,11 @@ class PollService:
         return None
 
     def _needs_user_refresh(self, device: Device, *, force: bool = False) -> bool:
-        """Pull terminal user names when the local cache has none."""
+        """Re-read the terminal user table when a saved name is still missing.
+
+        A cache that already has Shiva or Ramu must not block a later enrollment.
+        The device name for a new user id is fetched on the next poll.
+        """
         if self._device_users is None:
             return False
         if force:
@@ -857,10 +863,29 @@ class PollService:
             cached = self._device_users.list_for_device(device.id)
         except Exception:
             return True
-        if any(str(getattr(u, "name", "") or "").strip() for u in cached):
-            return False
         due = self._user_refresh_after.get(device.id, 0.0)
-        return time.monotonic() >= due
+        if time.monotonic() < due:
+            return False
+        if not cached or any(not str(getattr(u, "name", "") or "").strip() for u in cached):
+            return True
+        # Names can be added on the terminal after the first download.
+        return True
+
+    def _logs_missing_names(self, device: Device, logs) -> bool:
+        """True when a punch belongs to a user id that has no saved name yet."""
+        if self._device_users is None:
+            return False
+        for log in logs or []:
+            code = str(getattr(log, "user_id", "") or "").strip()
+            if not code:
+                continue
+            try:
+                name = str(self._device_users.find_name(code, device_id=device.id) or "").strip()
+            except Exception:
+                return True
+            if not name or name.lower() == code.lower():
+                return True
+        return False
 
     def refresh_device_user_names(self, device: Device) -> int:
         """Download the terminal user table and cache names for attendance views."""
@@ -883,7 +908,7 @@ class PollService:
                 extra={"device_id": device.id},
             )
             if named:
-                self._user_refresh_after.pop(device.id, None)
+                self._user_refresh_after[device.id] = time.monotonic() + 120.0
             else:
                 self._user_refresh_after[device.id] = time.monotonic() + 300.0
             return saved
@@ -908,8 +933,8 @@ class PollService:
                 adapter.device.name,
                 extra={"device_id": adapter.device.id},
             )
-            if users:
-                self._user_refresh_after.pop(adapter.device.id, None)
+            if users and named:
+                self._user_refresh_after[adapter.device.id] = time.monotonic() + 120.0
             else:
                 self._user_refresh_after[adapter.device.id] = time.monotonic() + 300.0
             return users
@@ -987,6 +1012,8 @@ class PollService:
             since = None
 
         logs = adapter.download_logs(since=since)
+        if not want_users and self._logs_missing_names(adapter.device, logs):
+            want_users = True
         if not full:
             clock_fix = {"read_device_time": device_now}
             if unset_clock:

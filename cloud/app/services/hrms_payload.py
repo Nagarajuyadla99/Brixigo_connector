@@ -5,6 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from app.models import AttendancePunch, Employee, Organisation
+from app.services.employee_codes import (
+    display_employee_code,
+    mission_employee_code,
+    organisation_code_prefix,
+    organisation_omits_prefix,
+)
 from app.services.employees import reported_person_name
 from app.services.hrms_identity import canonical_hrms_employee_id, resolve_hrms_person_name
 
@@ -57,6 +63,11 @@ def build_hrms_punch(
 ) -> dict[str, Any]:
     meta = dict(punch.metadata_json or {})
     code = str(punch.device_employee_code or "").strip()
+    settings = organisation.settings_json if isinstance(organisation.settings_json, dict) else {}
+    prefix = organisation_code_prefix(settings)
+    omit_prefix = organisation_omits_prefix(settings)
+    mission_code = mission_employee_code(code, omit_prefix=omit_prefix, prefix=prefix)
+    shown = display_employee_code(code, prefix=prefix)
     roster_name = reported_person_name(employee.name, code) if employee else ""
     snapshot = reported_person_name(
         meta.get("employee_name") or meta.get("user_name") or meta.get("name"),
@@ -86,8 +97,11 @@ def build_hrms_punch(
         "source_punch_id": punch.id,
         "idempotency_key": punch.idempotency_key,
         "organisation_external_code": org_code,
+        "organisation_name": str(organisation.name or "").strip(),
         "cloud_organisation_id": punch.organisation_id,
-        "employee_code": code,
+        "employee_code": mission_code,
+        "employee_number": mission_code if omit_prefix else None,
+        "server_employee_code": shown or code,
         "device_user_id": code,
         "employee_name": person_name,
         "cloud_employee_id": employee.id if employee else None,

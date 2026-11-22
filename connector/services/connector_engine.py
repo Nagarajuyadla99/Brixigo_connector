@@ -1002,9 +1002,7 @@ class ConnectorEngine:
             if not self._running:
                 return
             try:
-                cached = self.container.device_users.list_for_device(device.id)
-                if not any(str(getattr(u, "name", "") or "").strip() for u in cached):
-                    self.poll_service.refresh_device_user_names(device)
+                self.poll_service.refresh_device_user_names(device)
                 self.employee_sync.push_directory_to_cloud()
             except Exception as exc:
                 logger.warning(
@@ -1030,9 +1028,7 @@ class ConnectorEngine:
                 if not self._running:
                     return
                 try:
-                    cached = self.container.device_users.list_for_device(device.id)
-                    if not any(str(getattr(u, "name", "") or "").strip() for u in cached):
-                        self.poll_service.refresh_device_user_names(device)
+                    self.poll_service.refresh_device_user_names(device)
                 except Exception as exc:
                     logger.warning(
                         "Device user name refresh failed device=%s: %s",

@@ -18,8 +18,12 @@ from typing import Any, Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import AttendancePunch, Connector, Device, Employee, EmployeeSyncEvent, new_id
+from app.models import AttendancePunch, Connector, Device, Employee, EmployeeSyncEvent, Organisation, new_id
 from app.services.common import encrypt_str, write_audit
+from app.services.employee_codes import (
+    codes_align,
+    organisation_omits_prefix,
+)
 
 DEVICE_ROSTER_SOURCES = frozenset({"device_punch", "attendance_import", "device_user"})
 
@@ -156,12 +160,7 @@ def create_employee(
     extra_json: dict | None = None,
     actor_id: str = "",
 ) -> Employee:
-    existing = db.scalar(
-        select(Employee).where(
-            Employee.organisation_id == organisation_id,
-            Employee.employee_code == employee_code,
-        )
-    )
+    existing = get_by_code(db, organisation_id, employee_code)
     if existing:
         if is_device_roster_employee(existing):
             extra = dict(existing.extra_json or {})
@@ -305,10 +304,27 @@ def list_employees(
         q = q.where(Employee.organisation_id == organisation_id)
     if branch_id:
         q = q.where(Employee.branch_id == branch_id)
+    allow_number = False
+    if organisation_id:
+        org = db.get(Organisation, organisation_id)
+        allow_number = bool(org and organisation_omits_prefix(org.settings_json))
+    if not search or not allow_number:
+        if search:
+            pattern = f"%{search}%"
+            q = q.where((Employee.name.ilike(pattern)) | (Employee.employee_code.ilike(pattern)))
+        return list(db.scalars(q.offset(offset).limit(limit)))
+    rows = list(db.scalars(q))
     if search:
-        pattern = f"%{search}%"
-        q = q.where((Employee.name.ilike(pattern)) | (Employee.employee_code.ilike(pattern)))
-    return list(db.scalars(q.offset(offset).limit(limit)))
+        needle = search.strip()
+        folded = needle.lower()
+        rows = [
+            emp
+            for emp in rows
+            if folded in str(emp.name or "").lower()
+            or folded in str(emp.employee_code or "").lower()
+            or (allow_number and codes_align(emp.employee_code, needle))
+        ]
+    return rows[offset : offset + limit]
 
 
 def bulk_assign_devices(
@@ -362,12 +378,29 @@ def transfer_employee(
 
 
 def get_by_code(db: Session, organisation_id: str, employee_code: str) -> Employee | None:
-    return db.scalar(
+    """Exact code match, then Emp001 == 001 when this organisation's mission has no prefix."""
+    code = str(employee_code or "").strip()
+    if not organisation_id or not code:
+        return None
+    exact = db.scalar(
         select(Employee).where(
             Employee.organisation_id == organisation_id,
-            Employee.employee_code == str(employee_code or "").strip(),
+            Employee.employee_code == code,
         )
     )
+    if exact:
+        return exact
+    org = db.get(Organisation, organisation_id)
+    if not org or not organisation_omits_prefix(org.settings_json):
+        return None
+    hits = [
+        emp
+        for emp in db.scalars(select(Employee).where(Employee.organisation_id == organisation_id))
+        if codes_align(emp.employee_code, code)
+    ]
+    if len(hits) == 1:
+        return hits[0]
+    return None
 
 
 def ensure_employee_from_device(

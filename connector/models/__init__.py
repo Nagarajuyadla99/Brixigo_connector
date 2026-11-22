@@ -301,6 +301,9 @@ class ConnectorSettings:
     http_read_timeout: float = 30.0
     device_heartbeat_interval: int = 12
     api_health_interval: int = 30
+    # Server shows Emp001. A mission without that prefix is addressed as 001.
+    employee_code_prefix: str = ""
+    mission_omits_employee_prefix: bool = False
 
 
 @dataclass

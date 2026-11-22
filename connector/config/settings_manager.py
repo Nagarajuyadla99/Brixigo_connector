@@ -31,6 +31,16 @@ from security.encryption import SecretBox
 logger = logging.getLogger("brixigo")
 
 
+def _as_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
 DEFAULTS: dict[str, Any] = {
     "connector_id": "",
     "organisation_id": "",
@@ -73,6 +83,8 @@ DEFAULTS: dict[str, Any] = {
     "http_read_timeout": 30.0,
     "device_heartbeat_interval": 12,
     "api_health_interval": 30,
+    "employee_code_prefix": "",
+    "mission_omits_employee_prefix": False,
 }
 
 
@@ -96,6 +108,7 @@ class SettingsManager:
             self._data = deepcopy(DEFAULTS)
             self.save()
             self._loaded_ok = True
+            self._publish_employee_code_policy()
             return self.as_model()
 
         try:
@@ -121,6 +134,7 @@ class SettingsManager:
                 f"this file, or restore a backup from the data folder. "
                 f"Underlying error: {exc}"
             ) from exc
+        self._publish_employee_code_policy()
         return self.as_model()
 
     def save(self) -> None:
@@ -208,6 +222,10 @@ class SettingsManager:
             http_read_timeout=float(self._data.get("http_read_timeout") or 30.0),
             device_heartbeat_interval=int(self._data.get("device_heartbeat_interval") or 12),
             api_health_interval=int(self._data.get("api_health_interval") or 30),
+            employee_code_prefix=str(self._data.get("employee_code_prefix") or ""),
+            mission_omits_employee_prefix=_as_bool(
+                self._data.get("mission_omits_employee_prefix"), False
+            ),
         )
 
     def update(self, **kwargs: Any) -> ConnectorSettings:
@@ -215,7 +233,16 @@ class SettingsManager:
             if key in DEFAULTS:
                 self._data[key] = value
         self.save()
+        self._publish_employee_code_policy()
         return self.as_model()
+
+    def _publish_employee_code_policy(self) -> None:
+        from services.employee_codes import set_active_policy
+
+        set_active_policy(
+            prefix=str(self._data.get("employee_code_prefix") or ""),
+            omit_prefix=self._data.get("mission_omits_employee_prefix"),
+        )
 
     def apply_remote_config(self, remote: dict[str, Any]) -> ConnectorSettings:
         """
@@ -254,6 +281,8 @@ class SettingsManager:
             "http_read_timeout",
             "device_heartbeat_interval",
             "api_health_interval",
+            "employee_code_prefix",
+            "mission_omits_employee_prefix",
         }
         # Security-sensitive keys are applied only under strict rules
         changed: dict[str, Any] = {}
@@ -287,6 +316,7 @@ class SettingsManager:
         if changed:
             self.save()
             logger.info("Applied remote configuration keys=%s", sorted(changed.keys()))
+        self._publish_employee_code_policy()
         return self.as_model()
 
     def get(self, key: str, default: Any = None) -> Any:

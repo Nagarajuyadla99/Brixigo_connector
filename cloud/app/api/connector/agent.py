@@ -38,6 +38,7 @@ from app.security.auth import (
     get_connector_from_headers,
     hash_api_key,
 )
+from app.services.employee_codes import organisation_code_prefix, organisation_omits_prefix
 from app.services.names import normalize_identity, resolve_organisation
 from app.services.commands import ack_command, list_commands
 from app.services.common import health_score_from_metrics, parse_iso, raise_notification, write_audit
@@ -505,11 +506,15 @@ def get_config(
             )
         ).all()
     }
+    org = db.get(Organisation, connector.organisation_id)
+    org_settings = org.settings_json if org and isinstance(org.settings_json, dict) else {}
     return {
         "connector_id": connector.id,
         "organisation_id": connector.organisation_id,
         "branch_id": connector.branch_id,
         "name": connector.name,
+        "employee_code_prefix": organisation_code_prefix(org_settings),
+        "mission_omits_employee_prefix": organisation_omits_prefix(org_settings),
         "config": connector.config_json or {},
         "policies": policies,
         "command_signing_secret": settings.command_hmac_secret,

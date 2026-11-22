@@ -12,6 +12,7 @@ from __future__ import annotations
 import calendar
 from typing import Any, Iterable
 
+from services.employee_codes import alignment_key
 from services.employee_directory import enrich_employee_fields
 from services.punch_normalizer import event_label, method_label
 
@@ -39,7 +40,7 @@ def build_daily_rows(punches: Iterable[dict[str, Any]], *, day: str) -> list[dic
         if not code:
             continue
         row = grouped.setdefault(
-            code,
+            alignment_key(code),
             {
                 "employee_code": code,
                 "hrms_employee_name": punch.get("hrms_employee_name") or "",
@@ -129,7 +130,7 @@ def build_monthly_rows(
         if not code or day not in set(day_keys):
             continue
         emp = employees.setdefault(
-            code,
+            alignment_key(code),
             {
                 "employee_code": code,
                 "hrms_employee_name": punch.get("hrms_employee_name") or "",

@@ -17,7 +17,7 @@ from app.security.auth import get_current_user, tenant_filter_org_id
 from app.security.rbac import can_access
 from app.security.tenant import get_tenant_owned
 from app.services.common import write_audit
-from app.services.names import NameResolver, enrich_device, resolve_branch, resolve_organisation
+from app.services.names import NameResolver, enrich_device, ensure_branch, resolve_organisation
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
 
@@ -120,10 +120,8 @@ def create_device(body: DeviceCreate, user: User = Depends(_require), db: Sessio
 
     branch_id = None
     if body.branch_name:
-        branch = resolve_branch(db, org.id, body.branch_name)
-        if not branch:
-            raise HTTPException(status_code=404, detail=f"Branch not found: {body.branch_name}")
-        branch_id = branch.id
+        branch = ensure_branch(db, org.id, body.branch_name)
+        branch_id = branch.id if branch else None
 
     connector = _resolve_connector(db, org.id, body.connector_id, body.connector_name)
     terminal = (body.terminal_code or "").strip()
@@ -249,10 +247,8 @@ def update_device(
     if "branch_name" in data:
         branch_name = data.pop("branch_name")
         if branch_name:
-            branch = resolve_branch(db, d.organisation_id, branch_name)
-            if not branch:
-                raise HTTPException(status_code=404, detail=f"Branch not found: {branch_name}")
-            d.branch_id = branch.id
+            branch = ensure_branch(db, d.organisation_id, branch_name)
+            d.branch_id = branch.id if branch else None
         else:
             d.branch_id = None
 

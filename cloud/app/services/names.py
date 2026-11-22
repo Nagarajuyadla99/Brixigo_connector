@@ -84,7 +84,39 @@ def resolve_branch(db: Session, org_id: str, name: str) -> Branch | None:
     )
     if branch:
         return branch
-    return db.get(Branch, key)
+    found = db.get(Branch, key)
+    if found and found.organisation_id == org_id:
+        return found
+    return None
+
+
+def ensure_branch(db: Session, org_id: str, name: str) -> Branch | None:
+    """Return the branch, creating it when the name is new.
+
+    Connector and device forms treat branch as optional. A name that is not
+    already in the organisation must not fail the save.
+    """
+    key = (name or "").strip()
+    if not key or key in {"—", "-", "none", "null"}:
+        return None
+    found = resolve_branch(db, org_id, key)
+    if found:
+        return found
+    base = (normalize_identity(key) or "branch")[:56]
+    code = base
+    suffix = 2
+    while db.scalar(select(Branch).where(Branch.organisation_id == org_id, Branch.code == code)):
+        code = f"{base}-{suffix}"
+        suffix += 1
+    branch = Branch(
+        organisation_id=org_id,
+        name=key,
+        code=code,
+        status="active",
+    )
+    db.add(branch)
+    db.flush()
+    return branch
 
 
 def enrich_connector(row: dict, names: NameResolver) -> dict:

@@ -315,7 +315,9 @@ function initialsFromName(name, code) {
 }
 
 function personFromPunch(row) {
-  const code = String(row.device_employee_code || row.employee_code || row.device_user_id || '').trim();
+  const code = String(
+    row.display_employee_code || row.server_employee_code || row.device_employee_code || row.employee_code || row.device_user_id || ''
+  ).trim();
   const nested = row.employee && typeof row.employee === 'object' ? row.employee : {};
   const name = String(
     nested.name || row.employee_name || row.employee_display_name || ''
@@ -607,7 +609,7 @@ async function editConnector(connectorId) {
   const ip = prompt('IP address:', connector.ip_address || '');
   if (ip === null) return;
   const branch = prompt(
-    'Branch name (blank to clear):',
+    'Branch name (leave blank if this connector is not tied to a branch):',
     connector.branch_name && connector.branch_name !== '—' ? connector.branch_name : ''
   );
   if (branch === null) return;
@@ -1128,6 +1130,18 @@ async function loadCommands(status = '') {
 
 async function loadEmployees(search = '') {
   const q = search ? `?search=${encodeURIComponent(search)}` : '';
+  const note = document.getElementById('employee-code-note');
+  if (note) {
+    const mapping = await api('/payroll/hrms-mapping').catch(() => null);
+    if (mapping && mapping.mission_omits_employee_prefix) {
+      const prefix = mapping.employee_code_prefix || '';
+      note.textContent = prefix
+        ? `This organisation's mission has no employee prefix. The server shows ${prefix}001 and sends 001 to the mission.`
+        : 'This organisation\'s mission has no employee prefix. The server keeps the prefixed code and sends the number to the mission.';
+    } else if (note) {
+      note.textContent = '';
+    }
+  }
   const rows = await api(`/employees${q}`);
   const statsEl = document.getElementById('employee-stats');
   const withPunches = rows.filter(r => Number(r.punch_count || 0) > 0).length;
@@ -1150,7 +1164,7 @@ async function loadEmployees(search = '') {
         <span class="person-avatar">${escapeHtml(initialsFromName(r.name, r.employee_code))}</span>
         <div class="person-id">
           <h3>${escapeHtml(displayPersonName(r.name, r.employee_code))}</h3>
-          <span class="person-code">Employee code ${escapeHtml(r.employee_code || r.device_user_id || '—')} · ${escapeHtml(r.organisation_name || '')}${r.branch_name && r.branch_name !== '—' ? ` · ${escapeHtml(r.branch_name)}` : ''}</span>
+          <span class="person-code">Employee code ${escapeHtml(r.display_employee_code || r.employee_code || r.device_user_id || '—')}${r.mission_employee_code && r.mission_employee_code !== (r.display_employee_code || r.employee_code) ? ` · Mission ${escapeHtml(r.mission_employee_code)}` : ''} · ${escapeHtml(r.organisation_name || '')}${r.branch_name && r.branch_name !== '—' ? ` · ${escapeHtml(r.branch_name)}` : ''}</span>
         </div>
         ${statusPill(r.status || 'active')}
       </div>
@@ -1286,12 +1300,46 @@ async function loadWebhooks() {
 
 async function loadOrganisations() {
   const rows = await api('/tenancy/organisations');
+  const mapping = await api('/payroll/hrms-mapping').catch(() => null);
+  const prefixInput = document.getElementById('org-code-prefix');
+  const numbersInput = document.getElementById('org-mission-numbers');
+  if (mapping && prefixInput && document.activeElement !== prefixInput) {
+    prefixInput.value = mapping.employee_code_prefix || '';
+  }
+  if (mapping && numbersInput && document.activeElement !== numbersInput) {
+    numbersInput.checked = Boolean(mapping.mission_omits_employee_prefix);
+  }
   renderTable(document.getElementById('table-organisations'), [
     { key: 'name', label: 'Name' },
     { key: 'code', label: 'Code' },
     { key: 'status', label: 'Status', render: r => statusPill(r.status) },
     { key: 'timezone', label: 'Timezone' },
+    {
+      key: 'settings_json',
+      label: 'Mission codes',
+      render: r => {
+        const settings = r.settings_json || {};
+        if (!settings.mission_omits_employee_prefix) return 'Same code';
+        const prefix = settings.employee_code_prefix || '';
+        return prefix ? `Number on mission, ${prefix} on server` : 'Number on mission';
+      },
+    },
   ], rows);
+}
+
+async function saveEmployeeCodeAlignment() {
+  const mapping = await api('/payroll/hrms-mapping');
+  const prefix = document.getElementById('org-code-prefix').value.trim();
+  const omit = document.getElementById('org-mission-numbers').checked;
+  await api('/payroll/hrms-mapping', {
+    method: 'PUT',
+    body: JSON.stringify({
+      hrms_external_code: mapping.hrms_external_code,
+      employee_code_prefix: prefix,
+      mission_omits_employee_prefix: omit,
+    }),
+  });
+  await loadOrganisations();
 }
 
 async function loadBranches() {
@@ -1495,6 +1543,9 @@ document.getElementById('sidebar-nav').addEventListener('click', (e) => {
   if (btn) navigate(btn.dataset.module);
 });
 
+document.getElementById('btn-save-code-align')?.addEventListener('click', () => {
+  saveEmployeeCodeAlignment().catch((err) => alert(err.message || 'Could not save employee code alignment'));
+});
 document.getElementById('btn-refresh-connectors')?.addEventListener('click', loadConnectors);
 document.getElementById('btn-register-connector')?.addEventListener('click', () => registerConnector().catch(console.error));
 document.getElementById('btn-refresh-attendance')?.addEventListener('click', () => loadAttendance().catch(console.error));

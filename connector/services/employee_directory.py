@@ -15,6 +15,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.employee_codes import (
+    active_omit,
+    active_prefix,
+    display_employee_code,
+    mission_employee_code,
+)
+
 
 def employee_display_name(
     name: str | None,
@@ -50,9 +57,13 @@ def enrich_employee_fields(item: dict[str, Any]) -> dict[str, Any]:
     hrms = str(item.get("hrms_employee_name") or "").strip()
     device = str(item.get("device_user_name") or "").strip()
     resolved = hrms or device or str(item.get("employee_name") or "").strip()
+    shown = display_employee_code(code, prefix=active_prefix())
+    mission = mission_employee_code(code, omit_prefix=active_omit(), prefix=active_prefix())
     item["employee_code"] = code
+    item["display_employee_code"] = shown
+    item["mission_employee_code"] = mission
     item["employee_name"] = resolved
-    item["employee_display_name"] = employee_display_name(resolved, code)
+    item["employee_display_name"] = employee_display_name(resolved, shown)
     item["employee_name_source"] = name_source(hrms, device or resolved)
     item["employee_name_reported"] = name_reported(resolved)
     if not item["employee_name_reported"]:

@@ -13,6 +13,14 @@ from app.database import get_db
 from app.models import AttendancePunch, Employee, HrmsAttendanceOutbox, HrmsSyncStatus, Organisation, User
 from app.security.auth import get_current_user, tenant_filter_org_id
 from app.security.rbac import can_access
+from app.services.employee_codes import (
+    EmployeeCodeIndex,
+    codes_align,
+    display_employee_code,
+    mission_employee_code,
+    organisation_code_prefix,
+    organisation_omits_prefix,
+)
 from app.services.employees import reported_person_name
 from app.services.hrms_outbound import outbox_for_punches, summarize_outbox, sync_pending
 from app.services.hrms_identity import resolve_hrms_person_name
@@ -43,6 +51,8 @@ def _require(user: User = Depends(get_current_user)) -> User:
 
 class HrmsMappingIn(BaseModel):
     hrms_external_code: str = Field(min_length=1, max_length=64)
+    mission_omits_employee_prefix: Optional[bool] = None
+    employee_code_prefix: Optional[str] = Field(default=None, max_length=16)
 
 
 def _resolve_mapping_org(user: User, db: Session, organisation_id: str | None) -> Organisation:
@@ -58,14 +68,17 @@ def _resolve_mapping_org(user: User, db: Session, organisation_id: str | None) -
     return org
 
 
-def _employee_map(db: Session, org_ids: set[str]) -> dict[tuple[str, str], Employee]:
-    """Map (organisation_id, employee_code) → Employee for punch enrichment."""
+def _code_policy(db: Session, org_ids: set[str]) -> tuple[EmployeeCodeIndex, dict[str, str], set[str]]:
+    """Roster index plus the prefix each organisation shows on the server."""
     if not org_ids:
-        return {}
-    rows = db.scalars(
-        select(Employee).where(Employee.organisation_id.in_(sorted(org_ids)))
-    ).all()
-    return {(e.organisation_id, str(e.employee_code)): e for e in rows}
+        return EmployeeCodeIndex([]), {}, set()
+    rows = list(
+        db.scalars(select(Employee).where(Employee.organisation_id.in_(sorted(org_ids)))).all()
+    )
+    orgs = list(db.scalars(select(Organisation).where(Organisation.id.in_(sorted(org_ids)))).all())
+    prefixes = {org.id: organisation_code_prefix(org.settings_json) for org in orgs}
+    omit = {org.id for org in orgs if organisation_omits_prefix(org.settings_json)}
+    return EmployeeCodeIndex(rows, omit_org_ids=omit), prefixes, omit
 
 
 def _serialize(
@@ -73,6 +86,8 @@ def _serialize(
     *,
     employee: Employee | None = None,
     hrms=None,
+    prefix: str = "",
+    omit_prefix: bool = False,
 ) -> dict[str, Any]:
     meta = punch.metadata_json or {}
     punch_time = punch.punch_time
@@ -82,6 +97,8 @@ def _serialize(
         punch_time = format_punch_iso(fixed)
     matched = employee is not None
     code = str(punch.device_employee_code or "").strip()
+    shown = display_employee_code(code, prefix=prefix)
+    mission_code = mission_employee_code(code, omit_prefix=omit_prefix, prefix=prefix)
     roster_name = reported_person_name(employee.name, code) if employee else ""
     snapshot = reported_person_name(
         meta.get("employee_name") or meta.get("user_name") or meta.get("name"),
@@ -96,8 +113,9 @@ def _serialize(
     employee_payload = {
         "id": employee.id if employee else None,
         "name": person_name,
-        "code": code,
+        "code": shown,
         "device_user_id": code,
+        "mission_employee_code": mission_code,
         "name_reported": bool(person_name),
     }
     return {
@@ -108,7 +126,10 @@ def _serialize(
         "device_id": punch.device_id,
         "terminal_code": punch.terminal_code,
         "device_employee_code": punch.device_employee_code,
-        "employee_code": punch.device_employee_code,
+        "employee_code": code,
+        "display_employee_code": shown,
+        "mission_employee_code": mission_code,
+        "server_employee_code": shown,
         "device_user_id": punch.device_employee_code,
         "employee_id": employee.id if employee else None,
         "employee_name": person_name,
@@ -171,8 +192,11 @@ def list_payroll_punches(
     if terminal_code:
         stmt = stmt.where(AttendancePunch.terminal_code == terminal_code)
     search = str(employee_code or "").strip()
-    if search and search.replace(" ", "").isalnum() and search.isdigit():
-        stmt = stmt.where(AttendancePunch.device_employee_code == search)
+    if search and search.isdigit():
+        stmt = stmt.where(
+            (AttendancePunch.device_employee_code == search)
+            | (AttendancePunch.device_employee_code.like(f"%{search}"))
+        )
     if today and not since:
         start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         stmt = stmt.where(AttendancePunch.created_at >= _created_at_lower_bound(start))
@@ -186,25 +210,39 @@ def list_payroll_punches(
             stmt = stmt.where(AttendancePunch.punch_time >= since)
 
     rows = list(db.scalars(stmt).all())
-    emp_by_key = _employee_map(db, {r.organisation_id for r in rows if r.organisation_id})
+    org_ids = {r.organisation_id for r in rows if r.organisation_id}
+    emp_index, prefixes, omit_ids = _code_policy(db, org_ids)
     hrms_by_id = outbox_for_punches(db, [r.id for r in rows])
     punches = [
         _serialize(
             r,
-            employee=emp_by_key.get((r.organisation_id, str(r.device_employee_code))),
+            employee=emp_index.get(r.organisation_id, str(r.device_employee_code or "")),
             hrms=hrms_by_id.get(r.id),
+            prefix=prefixes.get(r.organisation_id, ""),
+            omit_prefix=r.organisation_id in omit_ids,
         )
         for r in rows
     ]
     if search:
         needle = search.lower()
-        punches = [
-            p
-            for p in punches
-            if needle in str(p.get("device_employee_code") or "").lower()
-            or needle in str(p.get("employee_name") or "").lower()
-            or needle in str(p.get("employee_display_name") or "").lower()
-        ]
+
+        def _matches(p: dict[str, Any]) -> bool:
+            raw = str(p.get("device_employee_code") or "")
+            shown = str(p.get("display_employee_code") or "")
+            mission = str(p.get("mission_employee_code") or "")
+            if needle in {raw.lower(), shown.lower(), mission.lower()}:
+                return True
+            if p.get("organisation_id") in omit_ids and codes_align(raw, search):
+                return True
+            if needle in str(p.get("employee_name") or "").lower():
+                return True
+            if needle in str(p.get("employee_display_name") or "").lower():
+                return True
+            if not search.isdigit() and (needle in raw.lower() or needle in shown.lower()):
+                return True
+            return False
+
+        punches = [p for p in punches if _matches(p)]
     matched = sum(1 for p in punches if p.get("employee_matched"))
     return {
         "ok": True,
@@ -238,7 +276,10 @@ def get_hrms_mapping(
     db: Session = Depends(get_db),
 ):
     org = _resolve_mapping_org(user, db, organisation_id)
-    explicit = str((org.settings_json or {}).get("hrms_external_code") or "").strip()
+    settings = org.settings_json if isinstance(org.settings_json, dict) else {}
+    explicit = str(settings.get("hrms_external_code") or "").strip()
+    prefix = organisation_code_prefix(settings)
+    omits = organisation_omits_prefix(settings)
     return {
         "ok": True,
         "cloud_organisation_id": org.id,
@@ -246,7 +287,13 @@ def get_hrms_mapping(
         "cloud_organisation_name": org.name,
         "hrms_external_code": organisation_external_code(org),
         "mapped_explicitly": bool(explicit),
-        "note": "Brixigo.com must set the same organisations.external_code. Display names are not used.",
+        "employee_code_prefix": prefix,
+        "mission_omits_employee_prefix": omits,
+        "note": (
+            "Mission employee codes are numbers only. The server shows the prefix."
+            if omits
+            else "Brixigo.com must set the same organisations.external_code. Display names are not used."
+        ),
     }
 
 
@@ -263,6 +310,12 @@ def set_hrms_mapping(
         raise HTTPException(status_code=400, detail="hrms_external_code is required")
     settings = dict(org.settings_json or {})
     settings["hrms_external_code"] = code
+    if body.mission_omits_employee_prefix is not None:
+        settings["mission_omits_employee_prefix"] = bool(body.mission_omits_employee_prefix)
+    if body.employee_code_prefix is not None:
+        settings["employee_code_prefix"] = organisation_code_prefix(
+            {"employee_code_prefix": body.employee_code_prefix}
+        )
     org.settings_json = settings
     now = datetime.now(timezone.utc)
     rows = db.scalars(
@@ -284,6 +337,8 @@ def set_hrms_mapping(
         "cloud_organisation_id": org.id,
         "cloud_organisation_code": org.code,
         "hrms_external_code": code,
+        "employee_code_prefix": organisation_code_prefix(settings),
+        "mission_omits_employee_prefix": organisation_omits_prefix(settings),
         "outbox_reset": len(rows),
     }
 

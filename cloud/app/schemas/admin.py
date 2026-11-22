@@ -347,6 +347,8 @@ class EmployeeOut(BaseModel):
     extra_json: dict[str, Any] = Field(default_factory=dict)
     source: str = ""
     device_user_id: str = ""
+    display_employee_code: str = ""
+    mission_employee_code: str = ""
     name_reported: bool = False
     punch_count: int = 0
     last_punch_at: str = ""

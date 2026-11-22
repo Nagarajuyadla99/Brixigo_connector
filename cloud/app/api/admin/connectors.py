@@ -15,7 +15,7 @@ from app.security.rbac import can_access
 from app.security.tenant import get_tenant_owned
 from app.services.commands import create_command
 from app.services.common import write_audit
-from app.services.names import NameResolver, enrich_connector, resolve_branch, resolve_organisation
+from app.services.names import NameResolver, enrich_connector, ensure_branch, resolve_organisation
 
 router = APIRouter(prefix="/connectors", tags=["Connectors"])
 
@@ -85,10 +85,8 @@ def update_connector(
     if "branch_name" in data:
         branch_name = data.pop("branch_name")
         if branch_name:
-            branch = resolve_branch(db, c.organisation_id, branch_name)
-            if not branch:
-                raise HTTPException(status_code=404, detail=f"Branch not found: {branch_name}")
-            c.branch_id = branch.id
+            branch = ensure_branch(db, c.organisation_id, branch_name)
+            c.branch_id = branch.id if branch else None
         else:
             c.branch_id = None
 
@@ -131,10 +129,8 @@ def register_connector(
 
     branch_id = None
     if body.branch_name:
-        branch = resolve_branch(db, org.id, body.branch_name)
-        if not branch:
-            raise HTTPException(status_code=404, detail=f"Branch not found: {body.branch_name}")
-        branch_id = branch.id
+        branch = ensure_branch(db, org.id, body.branch_name)
+        branch_id = branch.id if branch else None
 
     api_key = generate_api_key()
     connector = Connector(

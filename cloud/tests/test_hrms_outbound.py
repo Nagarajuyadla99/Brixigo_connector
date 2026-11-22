@@ -191,6 +191,7 @@ def test_01_org_mapping_uses_stable_code(client, settings, monkeypatch, org_a):
         assert stats["synced"] == 1
         assert fake.bodies[0]["punches"][0]["organisation_external_code"] == "org-a"
         assert fake.bodies[0]["punches"][0]["organisation_external_code"] != "Alpha Display Name"
+        assert fake.bodies[0]["punches"][0]["organisation_name"] == "Alpha Display Name"
     finally:
         db.close()
 
@@ -711,3 +712,84 @@ def test_30_unmatched_recovery_after_mapping(client, settings, monkeypatch, org_
         assert db.scalar(select(HrmsAttendanceOutbox)).status == "synced"
     finally:
         db.close()
+
+
+def test_31_mission_without_prefix_sends_number_server_shows_prefix(
+    client, settings, monkeypatch, org_a, auth_headers
+):
+    """Emp001 on the server is 001 on a mission that has no prefix."""
+    updated = client.patch(
+        f"/api/v1/tenancy/organisations/{org_a}",
+        headers=auth_headers,
+        json={
+            "settings_json": {
+                "mission_omits_employee_prefix": True,
+                "employee_code_prefix": "Emp",
+            }
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    _enable_hrms(settings, monkeypatch)
+    headers, cid, key = _push_one(
+        client,
+        settings,
+        org_a,
+        "prefix@test.com",
+        "Emp001",
+        "2026-09-08T15:00:00+05:30",
+        employee_name="Asha",
+    )
+    bare = _push(
+        client,
+        terminal="GATE-2",
+        connector_id=cid,
+        api_key=key,
+        org_id=org_a,
+        punches=[_punch("001", "2026-09-08T15:05:00+05:30", employee_name="Asha")],
+    )
+    assert bare.status_code == 200, bare.text
+    cfg = client.get(
+        f"{PREFIX}/connectors/{cid}/config",
+        headers={
+            "X-Organisation-Id": org_a,
+            "X-Connector-Id": cid,
+            "X-Device-Token": key,
+        },
+    )
+    assert cfg.status_code == 200, cfg.text
+    assert cfg.json()["mission_omits_employee_prefix"] is True
+    assert cfg.json()["employee_code_prefix"] == "Emp"
+
+    fake = FakeHrms()
+    fake.known_employees.add(("org-a", "001"))
+    db = _session(settings)
+    try:
+        stats = sync_pending(db, settings, client=_client_for(fake))
+        db.commit()
+        assert stats["synced"] == 2
+        sent_codes = {punch["employee_code"] for punch in fake.bodies[0]["punches"]}
+        assert sent_codes == {"001"}
+        by_device = {punch["device_user_id"]: punch for punch in fake.bodies[0]["punches"]}
+        assert by_device["Emp001"]["employee_code"] == "001"
+        assert by_device["Emp001"]["server_employee_code"] == "Emp001"
+        assert by_device["Emp001"]["organisation_name"] == "Alpha Display Name"
+        assert by_device["Emp001"]["employee_number"] == "001"
+        assert by_device["001"]["server_employee_code"] == "Emp001"
+        assert by_device["001"]["employee_code"] == "001"
+    finally:
+        db.close()
+
+    roster = client.get("/api/v1/employees", headers=headers).json()
+    codes = {row["employee_code"] for row in roster}
+    assert "Emp001" in codes
+    assert "001" not in codes
+    person = next(row for row in roster if row["employee_code"] == "Emp001")
+    assert person["display_employee_code"] == "Emp001"
+    assert person["mission_employee_code"] == "001"
+    assert person["name"] == "Asha"
+
+    feed = client.get("/api/v1/payroll/punches?employee_code=001&limit=20", headers=headers).json()
+    shown = {row["display_employee_code"] for row in feed["punches"]}
+    assert shown == {"Emp001"}
+    assert all(row["mission_employee_code"] == "001" for row in feed["punches"])
+    assert all(row["employee_matched"] for row in feed["punches"])
