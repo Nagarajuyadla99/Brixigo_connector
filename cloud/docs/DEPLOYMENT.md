@@ -58,6 +58,8 @@ Add `psycopg2-binary` to your deployment requirements.
 
 ## Reverse proxy (nginx)
 
+### Standard cloud admin host
+
 ```nginx
 server {
     listen 443 ssl;
@@ -72,6 +74,69 @@ server {
     }
 }
 ```
+
+### Cloud Missions — `connector.brixigo.com` (Port 80 + 443)
+
+Silicon Wireless (STL040) missions push attendance over HTTP GET / JSON POST.
+Expose the same FastAPI app on **Port 80** (and preferably 443) so devices can use:
+
+- `connector.brixigo.com/attendance?` (HTTP GET payload)
+- `connector.brixigo.com/attservice?` (HTTP POST JSON)
+- `connector.brixigo.com/rfid/attendance.aspx?` (GET alias)
+
+Port **4370** LAN connector flow is unchanged and does not use these paths.
+
+```nginx
+# HTTP — required for device SMS host URL with port 80
+server {
+    listen 80;
+    server_name connector.brixigo.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:9990;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# HTTPS — enable on device with SSL (*563OK / *555#017#01#)
+server {
+    listen 443 ssl;
+    server_name connector.brixigo.com;
+
+    # ssl_certificate     /etc/letsencrypt/live/connector.brixigo.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/connector.brixigo.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:9990;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+```
+
+#### Device SMS setup (from STL040 manual)
+
+1. In Cloud admin → **Cloud Missions**, save the 5-digit **STL SID** for the organisation.
+2. On the device SIM, set host URL (Port 80 = HTTP):
+
+```text
+*555#001#connector.brixigo.com/attendance?#80#
+```
+
+3. Set Org ID + Machine ID (SID 5 digits + MID 2 digits), for example SID `99999` MID `88`:
+
+```text
+*555#007#9999988#
+```
+
+4. Punches land in **Cloud Missions**, are stored as `AttendancePunch`, and sync to `a.brixigo.com` via existing HRMS outbound (`BRIXIGO_CLOUD_HRMS_BASE_URL`).
+
+JSON mode devices can use `connector.brixigo.com/attservice?` instead; MachineID should be `SID+MID` (7 digits) or a terminal already registered under that organisation.
 
 ## Storage directories
 

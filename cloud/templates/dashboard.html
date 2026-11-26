@@ -95,6 +95,7 @@
         <button data-module="monitoring" class="nav-item">Monitoring</button>
         <button data-module="analytics" class="nav-item">Analytics</button>
         <button data-module="attendance" class="nav-item">Attendance</button>
+        <button data-module="cloud-missions" class="nav-item">Cloud Missions</button>
         <p class="nav-section">Infrastructure</p>
         <button data-module="connectors" class="nav-item">Connector Server</button>
         <button data-module="devices" class="nav-item">Devices</button>
@@ -181,6 +182,34 @@
         </div>
         <div id="attendance-people" class="people-grid"></div>
         <div id="attendance-log" class="table-wrap hidden"><table id="table-attendance" class="data-table"></table></div>
+      </section>
+
+      <section id="module-cloud-missions" class="module-panel hidden">
+        <p class="page-lede">URL-push biometric missions (Port 80 / HTTPS). The device calls connector.brixigo.com on every login; punches are stored here and forwarded to a.brixigo.com. LAN devices on Port 4370 stay on Connector Server.</p>
+        <div class="stat-grid" id="cloud-missions-stats"></div>
+        <div class="toolbar cloud-missions-setup">
+          <label class="toolbar-field">
+            <span class="muted">STL Org ID (SID)</span>
+            <input id="cloud-mission-sid" maxlength="5" placeholder="5 digits e.g. 99999" class="search-input" />
+          </label>
+          <button class="btn btn-primary" id="btn-save-cloud-mission-sid" type="button">Save SID</button>
+          <button class="btn btn-secondary" id="btn-refresh-cloud-missions" type="button">Refresh</button>
+          <label class="toolbar-check"><input type="checkbox" id="cloud-missions-today-only" checked /> Today only</label>
+        </div>
+        <p id="cloud-missions-hint" class="hint"></p>
+        <div class="setup-box" id="cloud-missions-urls">
+          <h3>Device URL setup</h3>
+          <p class="muted">Send this SMS to the mission SIM after saving the SID (Port 80 = HTTP):</p>
+          <pre id="cloud-mission-sms" class="code-block">—</pre>
+          <p class="muted">GET push URL</p>
+          <pre id="cloud-mission-get-url" class="code-block">—</pre>
+          <p class="muted">JSON POST URL</p>
+          <pre id="cloud-mission-post-url" class="code-block">—</pre>
+        </div>
+        <h3>Cloud mission devices</h3>
+        <div class="table-wrap"><table id="table-cloud-mission-devices" class="data-table"></table></div>
+        <h3>URL punch feed</h3>
+        <div class="table-wrap"><table id="table-cloud-mission-punches" class="data-table"></table></div>
       </section>
 
       <section id="module-connectors" class="module-panel hidden">

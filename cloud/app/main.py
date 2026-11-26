@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.admin.router import router as admin_router
 from app.api.connector.agent import router as connector_agent_router
+from app.api.partners.stl import router as stl_partner_router
 from app.config import get_settings
 from app.database import SessionLocal, init_db
 from app.security.rate_limit import RateLimitMiddleware
@@ -72,6 +73,10 @@ def create_app() -> FastAPI:
 
     # On-premise connector agent contract (must match connector/api/cloud_client.py)
     app.include_router(connector_agent_router, prefix=settings.api_prefix)
+
+    # Cloud Missions — Silicon Wireless STL040 URL push (Port 80 / HTTPS)
+    # Paths must stay at site root so devices can use connector.brixigo.com/attendance?
+    app.include_router(stl_partner_router)
 
     templates = Jinja2Templates(directory=str(ROOT / "templates"))
     static_dir = ROOT / "static"

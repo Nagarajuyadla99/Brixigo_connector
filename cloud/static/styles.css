@@ -675,6 +675,39 @@ body {
   margin: -0.25rem 0 1.25rem;
 }
 
+.setup-box {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+  margin: 0 0 1.5rem;
+  background: var(--surface);
+}
+
+.setup-box h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.code-block {
+  display: block;
+  margin: 0.35rem 0 0.9rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--border);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.toolbar-field {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+}
+
 .view-toggle {
   display: inline-flex;
   background: var(--surface);

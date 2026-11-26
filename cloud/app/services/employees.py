@@ -25,7 +25,7 @@ from app.services.employee_codes import (
     organisation_omits_prefix,
 )
 
-DEVICE_ROSTER_SOURCES = frozenset({"device_punch", "attendance_import", "device_user"})
+DEVICE_ROSTER_SOURCES = frozenset({"device_punch", "attendance_import", "device_user", "cloud-mission"})
 
 
 def placeholder_employee_name(code: str) -> str:

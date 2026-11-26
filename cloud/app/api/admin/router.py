@@ -8,6 +8,7 @@ from app.api.admin import (
     analytics,
     audit,
     auth,
+    cloud_missions,
     commands,
     connectors,
     devices,
@@ -41,6 +42,7 @@ router.include_router(support.router)
 router.include_router(analytics.router)
 router.include_router(reports.router)
 router.include_router(payroll.router)
+router.include_router(cloud_missions.router)
 router.include_router(notifications.router)
 router.include_router(audit.router)
 router.include_router(settings.router)

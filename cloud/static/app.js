@@ -7,7 +7,7 @@ let charts = {};
 let currentModule = 'dashboard';
 let liveRefreshTimer = null;
 const LIVE_REFRESH_MS = 10000;
-const LIVE_MODULES = new Set(['dashboard', 'monitoring', 'connectors', 'devices', 'attendance']);
+const LIVE_MODULES = new Set(['dashboard', 'monitoring', 'connectors', 'devices', 'attendance', 'cloud-missions']);
 
 function stopLiveRefresh() {
   if (liveRefreshTimer) {
@@ -1387,11 +1387,70 @@ async function loadLocations() {
   ], rows);
 }
 
+async function loadCloudMissions() {
+  const todayOnly = document.getElementById('cloud-missions-today-only')?.checked !== false;
+  const params = new URLSearchParams({ limit: '300' });
+  if (todayOnly) params.set('today', 'true');
+
+  const [settings, devicesResp, punchesResp] = await Promise.all([
+    api('/cloud-missions/settings').catch(() => ({})),
+    api('/cloud-missions/devices').catch(() => ({ devices: [] })),
+    api(`/cloud-missions/punches?${params.toString()}`).catch(() => ({ punches: [] })),
+  ]);
+
+  const sidInput = document.getElementById('cloud-mission-sid');
+  if (sidInput && document.activeElement !== sidInput) {
+    sidInput.value = settings.stl_sid || '';
+  }
+  const hint = document.getElementById('cloud-missions-hint');
+  if (hint) hint.textContent = settings.setup_hint || '';
+  const smsEl = document.getElementById('cloud-mission-sms');
+  if (smsEl) smsEl.textContent = settings.sms_http_example || '—';
+  const getEl = document.getElementById('cloud-mission-get-url');
+  if (getEl) getEl.textContent = settings.get_url || '—';
+  const postEl = document.getElementById('cloud-mission-post-url');
+  if (postEl) postEl.textContent = settings.post_url || '—';
+
+  const devices = devicesResp.devices || [];
+  const punches = punchesResp.punches || [];
+  const inCount = punches.filter(r => String(r.event_type || '').toUpperCase() === 'IN').length;
+  const outCount = punches.filter(r => String(r.event_type || '').toUpperCase() === 'OUT').length;
+
+  renderStats(document.getElementById('cloud-missions-stats'), [
+    { label: todayOnly ? 'URL punches today' : 'URL punches', value: punches.length },
+    { label: 'Cloud mission devices', value: devices.length },
+    { label: 'IN', value: inCount },
+    { label: 'OUT', value: outCount },
+    { label: 'STL SID', value: settings.stl_sid || 'not set' },
+  ]);
+
+  renderTable(document.getElementById('table-cloud-mission-devices'), [
+    { key: 'name', label: 'Device' },
+    { key: 'terminal_code', label: 'Machine ID' },
+    { key: 'stl_sid', label: 'SID', render: r => escapeHtml(r.stl_sid || '—') },
+    { key: 'stl_mid', label: 'MID', render: r => escapeHtml(r.stl_mid || '—') },
+    { key: 'port', label: 'Port' },
+    { key: 'status', label: 'Status', render: r => statusPill(r.status) },
+    { key: 'attendance_count', label: 'Punches' },
+    { key: 'last_attendance_at', label: 'Last punch', cellClass: 'datetime', render: r => r.last_attendance_at ? formatDateTimeAligned(r.last_attendance_at) : '—' },
+  ], devices);
+
+  renderTable(document.getElementById('table-cloud-mission-punches'), [
+    { key: 'punch_time', label: 'Punch Time', cellClass: 'datetime', render: r => formatPunchTime(r.punch_time, r.created_at) },
+    { key: 'device_employee_code', label: 'Employee', render: r => escapeHtml(r.device_employee_code || '—') },
+    { key: 'event_type', label: 'Event', render: r => statusPill(r.event_type) },
+    { key: 'device_name', label: 'Device', render: r => escapeHtml(r.device_name || r.terminal_code || '—') },
+    { key: 'protocol', label: 'Protocol', render: r => escapeHtml(r.protocol || '—') },
+    { key: 'created_at', label: 'Received', cellClass: 'datetime', render: r => r.created_at ? formatDateTimeAligned(r.created_at) : '—' },
+  ], punches);
+}
+
 const loaders = {
   dashboard: loadDashboard,
   monitoring: loadMonitoring,
   analytics: loadAnalytics,
   attendance: loadAttendance,
+  'cloud-missions': loadCloudMissions,
   connectors: loadConnectors,
   devices: loadDevices,
   commands: loadCommands,
@@ -1414,6 +1473,7 @@ const loaders = {
 const titles = {
   dashboard: 'Dashboard', monitoring: 'Monitoring', analytics: 'Analytics',
   attendance: 'Attendance',
+  'cloud-missions': 'Cloud Missions',
   connectors: 'Connector Server', devices: 'Devices', commands: 'Command Center',
   employees: 'Employees', templates: 'Biometric Templates', provisioning: 'Provisioning Wizard',
   firmware: 'Firmware', support: 'Support & Diagnostics', reports: 'Reports',
@@ -1551,6 +1611,21 @@ document.getElementById('btn-register-connector')?.addEventListener('click', () 
 document.getElementById('btn-refresh-attendance')?.addEventListener('click', () => loadAttendance().catch(console.error));
 document.getElementById('attendance-today-only')?.addEventListener('change', () => loadAttendance().catch(console.error));
 document.getElementById('attendance-event')?.addEventListener('change', () => loadAttendance().catch(console.error));
+
+document.getElementById('btn-refresh-cloud-missions')?.addEventListener('click', () => loadCloudMissions().catch(console.error));
+document.getElementById('cloud-missions-today-only')?.addEventListener('change', () => loadCloudMissions().catch(console.error));
+document.getElementById('btn-save-cloud-mission-sid')?.addEventListener('click', async () => {
+  const sid = String(document.getElementById('cloud-mission-sid')?.value || '').trim();
+  try {
+    await api('/cloud-missions/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ stl_sid: sid }),
+    });
+    await loadCloudMissions();
+  } catch (err) {
+    alert(err.message || 'Failed to save Cloud Mission SID');
+  }
+});
 let attendanceFilterTimer = null;
 function scheduleAttendanceReload() {
   clearTimeout(attendanceFilterTimer);

@@ -71,6 +71,15 @@ RBAC_MATRIX: dict[str, set[str]] = {
         Role.AUDITOR.value,
         Role.SUPPORT_ENGINEER.value,
     },
+    "cloud_missions": {
+        Role.PLATFORM_ADMIN.value,
+        Role.ORG_ADMIN.value,
+        Role.HR_MANAGER.value,
+        Role.IT_ADMIN.value,
+        Role.BRANCH_ADMIN.value,
+        Role.AUDITOR.value,
+        Role.SUPPORT_ENGINEER.value,
+    },
     "analytics": {
         Role.PLATFORM_ADMIN.value,
         Role.ORG_ADMIN.value,
